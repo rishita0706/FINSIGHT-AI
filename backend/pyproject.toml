@@ -1,0 +1,9 @@
+[project]
+name = "finsight-ai-api"
+version = "0.1.0"
+requires-python = ">=3.11"
+description = "Personal finance analysis API with review-first statement import"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

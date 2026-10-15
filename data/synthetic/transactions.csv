@@ -1,0 +1,172 @@
+date,description,amount,direction,type,category,currency
+2025-10-01,Monthly salary,67000.00,credit,income,Income,INR
+2025-10-03,Cloud storage plan,4390.00,debit,expense,Subscriptions,INR
+2025-10-05,Ola cab,510.00,debit,expense,Transport,INR
+2025-10-07,Diagnostic lab,4690.00,debit,expense,Healthcare,INR
+2025-10-09,Broadband bill,3380.00,debit,expense,Housing and utilities,INR
+2025-10-09,Broadband bill,1120.00,debit,expense,Housing and utilities,INR
+2025-10-10,Local restaurant,790.00,debit,expense,Food and dining,INR
+2025-10-10,Pharmacy purchase,2050.00,debit,expense,Healthcare,INR
+2025-10-15,Mobile recharge,210.00,debit,expense,Housing and utilities,INR
+2025-10-19,Course fee,2210.00,debit,expense,Education,INR
+2025-10-19,Self transfer,3000.00,debit,transfer,Transfers,INR
+2025-10-20,Mobile recharge,1330.00,debit,expense,Housing and utilities,INR
+2025-10-21,Diagnostic lab,2890.00,debit,expense,Healthcare,INR
+2025-10-23,Rail ticket,1650.00,debit,expense,Travel,INR
+2025-10-25,BigBasket order,4930.00,debit,expense,Groceries,INR
+2025-11-01,Monthly salary,49000.00,credit,income,Income,INR
+2025-11-04,Cinema tickets,3660.00,debit,expense,Entertainment,INR
+2025-11-09,Fuel station,2190.00,debit,expense,Transport,INR
+2025-11-09,Broadband bill,2860.00,debit,expense,Housing and utilities,INR
+2025-11-10,Broadband bill,1530.00,debit,expense,Housing and utilities,INR
+2025-11-12,Local restaurant,1660.00,debit,expense,Food and dining,INR
+2025-11-13,DMart groceries,4170.00,debit,expense,Groceries,INR
+2025-11-13,Cafe coffee,3610.00,debit,expense,Food and dining,INR
+2025-11-14,Electronics shop,2570.00,debit,expense,Shopping,INR
+2025-11-16,Hotel booking,5710.00,debit,expense,Travel,INR
+2025-11-17,Mobile recharge,2520.00,debit,expense,Housing and utilities,INR
+2025-11-20,Local grocery,3060.00,debit,expense,Groceries,INR
+2025-11-25,Cinema tickets,5760.00,debit,expense,Entertainment,INR
+2025-11-25,Fuel station,5380.00,debit,expense,Transport,INR
+2025-12-01,Monthly salary,52000.00,credit,income,Income,INR
+2025-12-05,Cinema tickets,5140.00,debit,expense,Entertainment,INR
+2025-12-11,Zomato restaurant,180.00,debit,expense,Food and dining,INR
+2025-12-14,Netflix subscription,1760.00,debit,expense,Subscriptions,INR
+2025-12-15,Diagnostic lab,1560.00,debit,expense,Healthcare,INR
+2025-12-19,Fuel station,4460.00,debit,expense,Transport,INR
+2025-12-19,Electronics shop,4140.00,debit,expense,Shopping,INR
+2025-12-20,Cloud storage plan,4260.00,debit,expense,Subscriptions,INR
+2025-12-21,Learning subscription,4070.00,debit,expense,Education,INR
+2025-12-24,Home supplies,1910.00,debit,expense,Shopping,INR
+2025-12-24,Monthly rent,3290.00,debit,expense,Housing and utilities,INR
+2025-12-26,Netflix subscription,5420.00,debit,expense,Subscriptions,INR
+2025-12-27,Online apparel store,2820.00,debit,expense,Shopping,INR
+2025-12-27,Rail ticket,810.00,debit,expense,Travel,INR
+2026-01-01,Monthly salary,61000.00,credit,income,Income,INR
+2026-01-04,Blinkit essentials,1260.00,debit,expense,Groceries,INR
+2026-01-07,Hotel booking,2010.00,debit,expense,Travel,INR
+2026-01-07,Event tickets,5520.00,debit,expense,Entertainment,INR
+2026-01-12,DMart groceries,5880.00,debit,expense,Groceries,INR
+2026-01-13,Hotel booking,930.00,debit,expense,Travel,INR
+2026-01-13,Blinkit essentials,1250.00,debit,expense,Groceries,INR
+2026-01-15,Cafe coffee,4430.00,debit,expense,Food and dining,INR
+2026-01-17,Netflix subscription,490.00,debit,expense,Subscriptions,INR
+2026-01-17,Intercity bus,730.00,debit,expense,Travel,INR
+2026-01-19,Streaming rental,5770.00,debit,expense,Entertainment,INR
+2026-01-21,Clinic consultation,2530.00,debit,expense,Healthcare,INR
+2026-01-25,Rail ticket,5810.00,debit,expense,Travel,INR
+2026-01-27,Streaming rental,5930.00,debit,expense,Entertainment,INR
+2026-02-01,Monthly salary,48000.00,credit,income,Income,INR
+2026-02-02,BigBasket order,4260.00,debit,expense,Groceries,INR
+2026-02-03,Intercity bus,3630.00,debit,expense,Travel,INR
+2026-02-08,Spotify subscription,2220.00,debit,expense,Subscriptions,INR
+2026-02-10,Ola cab,1420.00,debit,expense,Transport,INR
+2026-02-12,Metro card recharge,2730.00,debit,expense,Transport,INR
+2026-02-12,Pharmacy purchase,2050.00,debit,expense,Healthcare,INR
+2026-02-13,Mobile recharge,1680.00,debit,expense,Housing and utilities,INR
+2026-02-15,Book purchase,2040.00,debit,expense,Education,INR
+2026-02-16,Rail ticket,2980.00,debit,expense,Travel,INR
+2026-02-19,Netflix subscription,2440.00,debit,expense,Subscriptions,INR
+2026-02-19,Self transfer,3000.00,debit,transfer,Transfers,INR
+2026-02-20,Pharmacy purchase,3970.00,debit,expense,Healthcare,INR
+2026-02-23,Broadband bill,4340.00,debit,expense,Housing and utilities,INR
+2026-02-25,DMart groceries,4680.00,debit,expense,Groceries,INR
+2026-03-01,Monthly salary,65000.00,credit,income,Income,INR
+2026-03-02,Clinic consultation,5870.00,debit,expense,Healthcare,INR
+2026-03-07,Electricity bill,3920.00,debit,expense,Housing and utilities,INR
+2026-03-07,Online apparel store,5790.00,debit,expense,Shopping,INR
+2026-03-08,Metro card recharge,5140.00,debit,expense,Transport,INR
+2026-03-14,Ola cab,3130.00,debit,expense,Transport,INR
+2026-03-14,Spotify subscription,1470.00,debit,expense,Subscriptions,INR
+2026-03-15,Book purchase,2500.00,debit,expense,Education,INR
+2026-03-15,Spotify subscription,710.00,debit,expense,Subscriptions,INR
+2026-03-17,Fuel station,4210.00,debit,expense,Transport,INR
+2026-03-20,Book store,3960.00,debit,expense,Shopping,INR
+2026-03-22,Fuel station,1520.00,debit,expense,Transport,INR
+2026-03-23,Book purchase,4910.00,debit,expense,Education,INR
+2026-03-27,BigBasket order,1390.00,debit,expense,Groceries,INR
+2026-04-01,Monthly salary,64000.00,credit,income,Income,INR
+2026-04-03,Mobile recharge,1710.00,debit,expense,Housing and utilities,INR
+2026-04-03,Local grocery,5170.00,debit,expense,Groceries,INR
+2026-04-04,Streaming rental,5160.00,debit,expense,Entertainment,INR
+2026-04-05,Learning subscription,5390.00,debit,expense,Education,INR
+2026-04-06,Monthly rent,5880.00,debit,expense,Housing and utilities,INR
+2026-04-09,Local restaurant,1430.00,debit,expense,Food and dining,INR
+2026-04-11,Fuel station,3210.00,debit,expense,Transport,INR
+2026-04-11,Pharmacy purchase,4040.00,debit,expense,Healthcare,INR
+2026-04-14,Local grocery,4940.00,debit,expense,Groceries,INR
+2026-04-17,Mobile recharge,1310.00,debit,expense,Housing and utilities,INR
+2026-04-25,Monthly rent,930.00,debit,expense,Housing and utilities,INR
+2026-04-25,Electronics shop,3830.00,debit,expense,Shopping,INR
+2026-04-26,Home supplies,4300.00,debit,expense,Shopping,INR
+2026-05-01,Monthly salary,72000.00,credit,income,Income,INR
+2026-05-02,Mobile recharge,5570.00,debit,expense,Housing and utilities,INR
+2026-05-02,Mobile recharge,5690.00,debit,expense,Housing and utilities,INR
+2026-05-03,DMart groceries,3110.00,debit,expense,Groceries,INR
+2026-05-05,Blinkit essentials,4970.00,debit,expense,Groceries,INR
+2026-05-05,Cloud storage plan,3420.00,debit,expense,Subscriptions,INR
+2026-05-05,Monthly rent,5180.00,debit,expense,Housing and utilities,INR
+2026-05-07,Monthly rent,2820.00,debit,expense,Housing and utilities,INR
+2026-05-07,Blinkit essentials,1730.00,debit,expense,Groceries,INR
+2026-05-15,Blinkit essentials,4470.00,debit,expense,Groceries,INR
+2026-05-15,Cinema tickets,3680.00,debit,expense,Entertainment,INR
+2026-05-20,Book store,80.00,debit,expense,Shopping,INR
+2026-05-21,Zomato restaurant,2500.00,debit,expense,Food and dining,INR
+2026-05-27,Netflix subscription,4280.00,debit,expense,Subscriptions,INR
+2026-06-01,Monthly salary,74000.00,credit,income,Income,INR
+2026-06-08,Uber ride,1600.00,debit,expense,Transport,INR
+2026-06-09,Cafe coffee,820.00,debit,expense,Food and dining,INR
+2026-06-11,Ola cab,5620.00,debit,expense,Transport,INR
+2026-06-11,Zomato restaurant,850.00,debit,expense,Food and dining,INR
+2026-06-14,Diagnostic lab,4640.00,debit,expense,Healthcare,INR
+2026-06-14,Ola cab,5860.00,debit,expense,Transport,INR
+2026-06-15,Cloud storage plan,2830.00,debit,expense,Subscriptions,INR
+2026-06-16,Mobile recharge,5330.00,debit,expense,Housing and utilities,INR
+2026-06-16,Electronics shop,1500.00,debit,expense,Shopping,INR
+2026-06-18,Mobile recharge,3450.00,debit,expense,Housing and utilities,INR
+2026-06-19,BigBasket order,3600.00,debit,expense,Groceries,INR
+2026-06-19,Self transfer,3000.00,debit,transfer,Transfers,INR
+2026-06-20,Event tickets,2390.00,debit,expense,Entertainment,INR
+2026-06-26,Blinkit essentials,3370.00,debit,expense,Groceries,INR
+2026-07-01,Monthly salary,65000.00,credit,income,Income,INR
+2026-07-02,Rail ticket,820.00,debit,expense,Travel,INR
+2026-07-03,Home supplies,1920.00,debit,expense,Shopping,INR
+2026-07-05,Local grocery,5480.00,debit,expense,Groceries,INR
+2026-07-05,Ola cab,2540.00,debit,expense,Transport,INR
+2026-07-06,Intercity bus,3620.00,debit,expense,Travel,INR
+2026-07-13,Streaming rental,680.00,debit,expense,Entertainment,INR
+2026-07-14,Metro card recharge,2330.00,debit,expense,Transport,INR
+2026-07-15,Streaming rental,4210.00,debit,expense,Entertainment,INR
+2026-07-16,Netflix subscription,2700.00,debit,expense,Subscriptions,INR
+2026-07-17,Local grocery,4940.00,debit,expense,Groceries,INR
+2026-07-21,Local restaurant,4590.00,debit,expense,Food and dining,INR
+2026-07-22,Learning subscription,2490.00,debit,expense,Education,INR
+2026-07-24,Ola cab,2300.00,debit,expense,Transport,INR
+2026-08-01,Monthly salary,52000.00,credit,income,Income,INR
+2026-08-02,Event tickets,710.00,debit,expense,Entertainment,INR
+2026-08-02,Diagnostic lab,630.00,debit,expense,Healthcare,INR
+2026-08-03,Course fee,5190.00,debit,expense,Education,INR
+2026-08-09,Diagnostic lab,730.00,debit,expense,Healthcare,INR
+2026-08-09,Netflix subscription,1280.00,debit,expense,Subscriptions,INR
+2026-08-12,Ola cab,3410.00,debit,expense,Transport,INR
+2026-08-14,Book purchase,2010.00,debit,expense,Education,INR
+2026-08-14,Electricity bill,2050.00,debit,expense,Housing and utilities,INR
+2026-08-17,Intercity bus,2580.00,debit,expense,Travel,INR
+2026-08-19,Local restaurant,160.00,debit,expense,Food and dining,INR
+2026-08-20,Cinema tickets,3250.00,debit,expense,Entertainment,INR
+2026-08-20,Clinic consultation,2940.00,debit,expense,Healthcare,INR
+2026-08-22,Netflix subscription,2560.00,debit,expense,Subscriptions,INR
+2026-09-01,Monthly salary,67000.00,credit,income,Income,INR
+2026-09-03,Intercity bus,1790.00,debit,expense,Travel,INR
+2026-09-03,Swiggy order,110.00,debit,expense,Food and dining,INR
+2026-09-03,Home supplies,5470.00,debit,expense,Shopping,INR
+2026-09-04,Learning subscription,90.00,debit,expense,Education,INR
+2026-09-06,Broadband bill,3390.00,debit,expense,Housing and utilities,INR
+2026-09-06,Intercity bus,4580.00,debit,expense,Travel,INR
+2026-09-08,Monthly rent,4670.00,debit,expense,Housing and utilities,INR
+2026-09-08,Streaming rental,1790.00,debit,expense,Entertainment,INR
+2026-09-10,Diagnostic lab,5320.00,debit,expense,Healthcare,INR
+2026-09-11,Spotify subscription,4160.00,debit,expense,Subscriptions,INR
+2026-09-13,Learning subscription,2640.00,debit,expense,Education,INR
+2026-09-14,Blinkit essentials,5840.00,debit,expense,Groceries,INR
+2026-09-24,Learning subscription,2510.00,debit,expense,Education,INR

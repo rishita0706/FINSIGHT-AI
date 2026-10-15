@@ -6,7 +6,7 @@ from decimal import Decimal, InvalidOperation
 DATE_FORMATS = ["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d %b %Y", "%d/%m/%y"]
 RULES = {
     "Food and dining": ["swiggy", "zomato", "restaurant", "cafe"],
-    "Groceries": ["bigbasket", "blinkit", "dmart", "grocery"],
+    "Groceries": ["bigbasket", "blinkit", "dmart", "grocer"],
     "Transport": ["uber", "ola", "metro", "irctc", "fuel"],
     "Subscriptions": ["netflix", "spotify", "prime"],
     "Housing and utilities": ["rent", "electricity", "broadband", "airtel", "jio"],

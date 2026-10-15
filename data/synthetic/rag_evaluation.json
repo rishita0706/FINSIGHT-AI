@@ -1,0 +1,22 @@
+[
+  {
+    "question": "How does compound interest work?",
+    "expected_document": "compound-interest"
+  },
+  {
+    "question": "What can I do to plan a budget?",
+    "expected_document": "budgeting-basics"
+  },
+  {
+    "question": "What should I check when comparing loan offers?",
+    "expected_document": "loan-comparison"
+  },
+  {
+    "question": "How do I protect my UPI PIN?",
+    "expected_document": "digital-safety"
+  },
+  {
+    "question": "What is the capital of France?",
+    "expected_document": null
+  }
+]

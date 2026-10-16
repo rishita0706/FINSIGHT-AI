@@ -8,6 +8,7 @@ from pathlib import Path
 from .logic import categorize
 
 DEFAULT_MODEL = Path(__file__).parent / "ml" / "artifacts" / "categorizer-v1.joblib"
+NEEDS_REVIEW_CONFIDENCE = 0.60
 
 
 @lru_cache(maxsize=2)
@@ -26,7 +27,7 @@ def predict_category(description: str) -> tuple[str, str, str, str | None]:
     probabilities = model.predict_proba([description])[0]
     index = int(probabilities.argmax())
     confidence = float(probabilities[index])
-    if confidence < 0.60:
+    if confidence < NEEDS_REVIEW_CONFIDENCE:
         category, tx_type = categorize(description)
         return category, tx_type, "rule", f"{confidence:.4f}"
     category = str(model.classes_[index])

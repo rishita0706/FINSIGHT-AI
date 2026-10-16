@@ -2,7 +2,7 @@
 
 ## Categorization
 
-`python scripts/train_categorizer.py` fits a TF-IDF (unigrams/bigrams) + Logistic Regression pipeline on fixed-seed fictional transaction descriptions. The generated split has 364 train rows and 91 held-out shuffled test rows. The observed run reported macro-F1 **1.00** and weighted-F1 **1.00**, with per-class precision/recall and confusion matrix written to ignored `artifacts/categorizer-evaluation.json`.
+`python scripts/evaluate_categorizer.py` fits and evaluates the versioned `categorizer-v1` TF-IDF (unigrams/bigrams) + Logistic Regression pipeline on fixed-seed fictional transaction descriptions. The generated split has 364 train rows and 91 held-out shuffled test rows. The report contains per-class precision/recall, a confusion matrix, and a 0.60 needs-review confidence threshold in ignored `artifacts/categorizer-evaluation.json`; authenticated clients can read it at `/api/v1/ml/categorizer/evaluation`.
 
 This score reflects repetitive generated templates, not real transactions. It must not be represented as expected user accuracy. The optional local model uses a 0.60 confidence threshold and falls back to keyword rules below that threshold or when the artifact is absent. Category edits are marked user-specified.
 
@@ -16,4 +16,4 @@ The API flags a debit as an unusual candidate when its amount is at least three 
 
 ## Retrieval evaluation
 
-`scripts/evaluate_rag.py` measured Recall@3 1.00, MRR 0.80, citation source-membership 1.00, and successful insufficient-evidence abstention for a five-question hand-authored set. It is deterministic lexical term overlap. This small dataset is not an independent faithfulness evaluation, nor does it use an LLM judge.
+`scripts/evaluate_rag.py` measures Recall@3, MRR, citation source-membership, and insufficient-evidence abstention for a five-question hand-authored set. By default it evaluates the deterministic lexical fallback; set `RAG_USE_DATABASE=true` with a migrated pgvector database to evaluate cosine-distance retrieval. This small dataset is not an independent faithfulness evaluation, nor does it use an LLM judge.

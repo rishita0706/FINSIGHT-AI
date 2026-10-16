@@ -9,25 +9,26 @@ FinSight AI is a personal-finance intelligence MVP for people who want to unders
 ## What works
 
 - React/TypeScript responsive web application: landing page, registration/login, dashboard, transaction list and manual entry, statement upload/review, budgets, savings goals, recurring candidates, insights, assistant, education notes, privacy/settings.
-- FastAPI API with Argon2 password hashes, opaque HttpOnly session cookies, CSRF custom-header checks, per-account/IP in-process authentication throttling, CORS allow-list, security headers, and user-scoped data queries.
-- CSV parsing and generic **text-based** PDF extraction. Transactions are previewed and editable before confirmation. Upload bytes are not retained; parsed preview rows expire after 24 hours and are erased on confirmation.
+- FastAPI API with Argon2 password hashes, rotated opaque HttpOnly sessions, CSRF checks, database-backed shared auth throttling, CSP/HSTS-capable security headers, CORS allow-list, and user-scoped data queries.
+- CSV parsing and a timeout/page/size-bounded PDF adapter pipeline. Transactions are previewed and editable before confirmation. Upload bytes and PDF passwords are not retained; parsed preview rows expire after 24 hours and are erased on confirmation.
 - Decimal-backed INR calculations, per-user duplicate fingerprints, CSV/data export, and transaction/account deletion.
-- Deterministic personal-finance Q&A. A question is routed to bounded calculations over the current user's data; it does not generate SQL.
-- Local educational retrieval from FinSight-authored notes with links to the RBI Financial Education page. Unknown topics abstain.
+- Persistent assistant conversations with separate calculation and citation payloads. Personal-finance Q&A uses bounded calculations over the current user's data; it does not generate SQL.
+- Versioned educational documents/chunks, embeddings, pgvector top-k retrieval, relevance filtering, citation deduplication, and a deterministic SQLite fallback. Unknown topics abstain.
+- A provider interface with a no-network mock default and optional environment-configured OpenAI-compatible model/embedding adapter. Rewrites with changed numeric values or URLs are rejected; token usage is recorded without storing prompts or responses.
 - Optional TF-IDF + Logistic Regression categorizer, rule-based fallback, explainable median-based unusual-transaction candidates, and a three-month spending baseline.
-- SQLite for quick local development, PostgreSQL via Docker Compose, and an Alembic schema entry point.
+- SQLite for quick local development, PostgreSQL + pgvector via Docker Compose, and explicit Alembic migrations.
 - Fixed-seed fictional datasets and scripts for categorizer, anomaly, forecast, and retrieval evaluation.
 
 ## Honest MVP limitations
 
-- Generic PDF extraction is best-effort and is **not universal bank support**. Scanned/OCR PDFs, account/balance reconciliation, bank-specific adapters, and broad statement-format coverage are not implemented. Check and correct every extracted row.
+- Generic PDF extraction is best-effort and is **not universal bank support**. Scanned PDFs are detected but OCR is unavailable; balance reconciliation is attempted only when opening/closing balances can be found. Check and correct every extracted row.
 - Live bank, UPI, PhonePe, Paytm, Google Pay, NPCI and Account Aggregator connectivity is not implemented. The product never requests bank passwords, OTPs, or UPI PINs.
-- The assistant is not an LLM. It is a deterministic query router plus local lexical retrieval. There is no paid provider dependency, streaming, persistent conversation history, vector embeddings, or pgvector retrieval yet.
+- The LLM is disabled by default. Enabling the optional remote provider sends the verified answer text to that provider for phrasing; never enable it without reviewing provider data terms. There is no streaming or live financial-data integration.
 - Education notes are FinSight-authored summaries, not imported regulatory source documents. RBI is linked as further reading; the notes do not claim RBI authorship or endorsement.
 - The optional categorizer is trained on synthetic examples and is not enabled unless an artifact is generated. It is not evidence of real-world accuracy.
 - Anomaly candidates and recurring-payment guesses are heuristics; neither establishes fraud or a real subscription. Forecasting requires three complete recorded months and is a simple baseline.
 - Records and display are INR only. Timezone preference is configurable; currency conversion is not performed.
-- No formal security certification, external penetration test, production deployment, broad frontend test suite, or production LLM integration is claimed. The frontend has a small smoke-test suite.
+- No formal security certification, external penetration test, or production deployment is claimed. See the focused automated checks and remaining limitations in the security/deployment docs.
 
 ## Architecture and data flow
 
@@ -39,18 +40,20 @@ flowchart LR
   IMPORT --> PREVIEW[Editable import preview]
   PREVIEW -->|explicit confirmation| DB
   API --> CALC[Decimal-based user-scoped calculations]
-  API --> RETRIEVE[Local lexical education retrieval]
+  API --> RETRIEVE[pgvector retrieval / local lexical fallback]
+  API --> LLM[Optional mock or OpenAI-compatible adapter]
+  API --> CHAT[(Conversation and message history)]
   API --> ML[Optional categorizer / statistical heuristics]
-  RETRIEVE --> NOTES[FinSight-authored notes + source metadata]
+  RETRIEVE --> NOTES[Versioned chunks + citations]
 ```
 
-Personal transaction questions use constrained server-side operations. Educational questions retrieve only a small static note set and cite the retrieved internal document; unsupported questions return an insufficient-evidence response. Uploaded statements are untrusted input and are never used as assistant instructions.
+Personal transaction questions use constrained server-side operations. Educational questions retrieve document chunks and cite the retrieved internal document; unsupported questions return an insufficient-evidence response. Uploaded statements are untrusted input and are never used as assistant instructions.
 
 ## Technology
 
 - Frontend: React 19, TypeScript strict, Vite, Tailwind CSS 4, React Router, TanStack Query, React Hook Form/Zod, Recharts, Lucide, Sonner.
-- Backend: Python 3.13+, FastAPI, Pydantic 2, SQLAlchemy 2, Alembic, Argon2id, PyMuPDF, scikit-learn.
-- Data: SQLite for local quick-start; PostgreSQL 16 in Compose. The Compose database image includes pgvector, but this MVP does not yet store or query vectors.
+- Backend: Python 3.13+, FastAPI, Pydantic 2, SQLAlchemy 2, Alembic, Argon2id, PyMuPDF, scikit-learn, pgvector.
+- Data: SQLite for local quick-start; PostgreSQL 16 + pgvector in Compose.
 
 ## Quick start — Windows PowerShell
 
@@ -67,9 +70,9 @@ python scripts/generate_synthetic_data.py
 ```powershell
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r backend\requirements.txt
+python -m pip install -r backend\requirements.txt -r backend\requirements-dev.txt
 Set-Location backend
-python -m alembic upgrade head
+alembic upgrade head
 python -m uvicorn app.main:app --reload
 ```
 
@@ -128,14 +131,14 @@ All generated data is fictional and fixed-seed (`706`):
 
 ```powershell
 python scripts/generate_synthetic_data.py
-python scripts/train_categorizer.py
+python scripts/evaluate_categorizer.py
 python scripts/train_categorizer.py --save-artifact
 python scripts/evaluate_forecaster.py
 python scripts/evaluate_anomaly.py
 python scripts/evaluate_rag.py
 ```
 
-The categorizer report is written under ignored `artifacts\`; an optional model artifact is written under ignored `backend\app\ml\artifacts\`. The application uses deterministic rules if no artifact exists. Synthetic classification scores do not measure real-world performance. `scripts\ingest_knowledge_base.py` validates the bundled local notes; it does not download material or create vector embeddings.
+`scripts/evaluate_categorizer.py` writes the versioned per-class report used by the app's evaluation page and ignored `artifacts\` output; an optional model artifact is written under ignored `backend\app\ml\artifacts\`. The application uses deterministic rules if no artifact exists. Synthetic classification scores do not measure real-world performance. `scripts\ingest_knowledge_base.py` refreshes the bundled notes or ingests a metadata manifest of local/HTTPS HTML, PDF, and text sources.
 
 ## Tests and checks
 
@@ -143,7 +146,7 @@ The categorizer report is written under ignored `artifacts\`; an optional model 
 python scripts/run_checks.py
 ```
 
-This runs backend and ZIP-packager tests, frontend smoke tests, and the strict TypeScript/production frontend build. You can run the pieces individually:
+This runs backend Ruff/mypy checks and tests, ZIP-packager tests, frontend tests, and the TypeScript/production build. CI also applies migrations and tests against PostgreSQL + pgvector, audits Python and npm dependencies, and evaluates the synthetic baselines. You can run the pieces individually:
 
 ```powershell
 Set-Location backend
@@ -153,7 +156,7 @@ npm run typecheck
 npm run build
 ```
 
-Tests cover registration/login, CSRF, cross-user access, transaction calculations, CSV/PDF review and confirm behavior, duplicate handling, assistant grounding/abstention, settings/data export, and budgets/goals.
+Checks include Ruff, a focused mypy pass for the LLM adapter interface, registration/login/session rotation, CSRF/security headers, cross-user access, transaction calculations, CSV/PDF review and confirm behavior, duplicate handling, persistent conversations, assistant grounding/abstention, data deletion, settings/export, budgets and goals. CI applies Alembic migrations and runs backend tests against PostgreSQL with pgvector.
 
 ## Source ZIP
 
@@ -175,11 +178,15 @@ See [`.env.example`](./.env.example), [`backend/.env.example`](./backend/.env.ex
 | `AUTO_CREATE_SCHEMA` | Local convenience only; set `false` when using migrations in deployment |
 | `COOKIE_SECURE` | Set `true` behind HTTPS in production |
 | `CORS_ORIGINS` | Comma-separated explicit browser origins |
+| `LLM_PROVIDER` | `mock` (default) or `openai` |
+| `OPENAI_API_KEY` | Required only for the optional OpenAI-compatible provider |
+| `OPENAI_MODEL`, `OPENAI_EMBEDDING_MODEL` | Optional provider model overrides |
+| `LLM_TIMEOUT_SECONDS` | Provider request timeout (default 10 seconds; three bounded attempts) |
 | `VITE_API_URL` | API origin compiled into the frontend |
 | `CATEGORIZER_MODEL_PATH` | Optional local versioned sklearn artifact path |
 | `DEMO_EMAIL`, `DEMO_PASSWORD` | Required only for local synthetic-data seeding |
 
-No LLM credentials, bank credentials, or paid service are required for the local demo.
+No LLM credentials, bank credentials, or paid service are required for the local demo. The mock provider and SQLite lexical fallback are used by default.
 
 ## API and data
 
@@ -187,6 +194,6 @@ The backend OpenAPI spec is generated at `/openapi.json`. See [API reference](do
 
 ## Security, retention, and deployment
 
-See [security and privacy](docs/security-and-privacy.md), [deployment](docs/deployment.md), [limitations](docs/project-limitations.md), and the [knowledge retrieval pipeline](docs/rag-pipeline.md). Local in-process auth throttling is not a substitute for a distributed production rate limiter/WAF. Backups are controlled by the database operator; deleting application data cannot retract data already present in operator-managed backups. Do not use real account statements until you have reviewed the code and deployment controls.
+See [security and privacy](docs/security-and-privacy.md), [deployment](docs/deployment.md), [limitations](docs/project-limitations.md), and the [knowledge retrieval pipeline](docs/rag-pipeline.md). Database-backed auth throttling is not a substitute for edge-level abuse protection. Backups are controlled by the database operator; deleting application data cannot retract data already present in operator-managed backups. Do not use real account statements until you have reviewed the code and deployment controls.
 
 No live deployment has been performed or verified.

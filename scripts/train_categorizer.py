@@ -12,6 +12,8 @@ from sklearn.pipeline import Pipeline
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data" / "synthetic"
+MODEL_VERSION = "categorizer-v1"
+NEEDS_REVIEW_CONFIDENCE = 0.60
 
 def load(path: Path) -> tuple[list[str], list[str]]:
     with path.open(encoding="utf-8", newline="") as handle:
@@ -32,6 +34,7 @@ def main() -> None:
     predictions = model.predict(x_test)
     report = classification_report(y_test, predictions, output_dict=True, zero_division=0)
     result = {
+        "version": MODEL_VERSION,
         "model": "TF-IDF + Logistic Regression",
         "dataset": "synthetic fictional transaction descriptions",
         "split": "fixed 80/20 shuffled split generated with seed 706",
@@ -42,17 +45,23 @@ def main() -> None:
         "per_class": report,
         "confusion_matrix": confusion_matrix(y_test, predictions, labels=model.classes_).tolist(),
         "labels": model.classes_.tolist(),
+        "needs_review_confidence_threshold": NEEDS_REVIEW_CONFIDENCE,
+        "needs_review_policy": "Predictions below this confidence fall back to deterministic rules and should be reviewed.",
         "limitations": "Synthetic examples share templates and do not establish real-world accuracy.",
     }
     out = ROOT / "artifacts"
     out.mkdir(exist_ok=True)
-    (out / "categorizer-evaluation.json").write_text(json.dumps(result, indent=2), encoding="utf-8")
+    serialized = json.dumps(result, indent=2)
+    (out / "categorizer-evaluation.json").write_text(serialized, encoding="utf-8")
+    report_path = ROOT / "backend" / "app" / "ml" / "evaluation.json"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(serialized, encoding="utf-8")
     if args.save_artifact:
         import joblib
 
         artifact_dir = ROOT / "backend" / "app" / "ml" / "artifacts"
         artifact_dir.mkdir(parents=True, exist_ok=True)
-        joblib.dump(model, artifact_dir / "categorizer-v1.joblib")
+        joblib.dump(model, artifact_dir / f"{MODEL_VERSION}.joblib")
     print(json.dumps({key: result[key] for key in ("model", "train_rows", "test_rows", "macro_f1", "weighted_f1")}, indent=2))
 
 if __name__ == "__main__":

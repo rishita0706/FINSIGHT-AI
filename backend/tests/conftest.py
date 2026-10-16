@@ -1,5 +1,9 @@
 import os, tempfile
-os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/t.db"
+if "FINSIGHT_TEST_DATABASE_URL" in os.environ:
+    os.environ["DATABASE_URL"] = os.environ["FINSIGHT_TEST_DATABASE_URL"]
+else:
+    os.environ["DATABASE_URL"] = f"sqlite:///{tempfile.mkdtemp()}/t.db"
+os.environ.setdefault("AUTO_CREATE_SCHEMA", "true" if os.environ["DATABASE_URL"].startswith("sqlite") else "false")
 import pytest
 from fastapi.testclient import TestClient
 from app.main import app

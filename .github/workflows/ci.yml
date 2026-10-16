@@ -7,30 +7,58 @@ on:
 jobs:
   checks:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: finsight_test
+          POSTGRES_USER: finsight
+          POSTGRES_PASSWORD: finsight_test_password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U finsight -d finsight_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://finsight:finsight_test_password@localhost:5432/finsight_test
+      FINSIGHT_TEST_DATABASE_URL: postgresql+psycopg://finsight:finsight_test_password@localhost:5432/finsight_test
+      AUTO_CREATE_SCHEMA: "false"
+      RAG_USE_DATABASE: "true"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
-          cache-dependency-path: backend/requirements.txt
+          cache-dependency-path: |
+            backend/requirements.txt
+            backend/requirements-dev.txt
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - name: Install backend dependencies
-        run: python -m pip install -r backend/requirements.txt
+        run: python -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - name: Apply PostgreSQL migrations
+        working-directory: backend
+        run: alembic upgrade head
       - name: Generate fictional fixtures
         run: python scripts/generate_synthetic_data.py
       - name: Install frontend dependencies
         working-directory: frontend
         run: npm ci
-      - name: Run tests and production build
+      - name: Audit dependencies
+        run: |
+          pip-audit --local
+          npm audit --prefix frontend --audit-level=high
+      - name: Run tests, frontend lint, and production build
         run: python scripts/run_checks.py
       - name: Evaluate baselines
         run: |
-          python scripts/train_categorizer.py
+          python scripts/evaluate_categorizer.py
           python scripts/evaluate_anomaly.py
           python scripts/evaluate_forecaster.py
           python scripts/evaluate_rag.py

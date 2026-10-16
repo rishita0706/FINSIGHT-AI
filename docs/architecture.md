@@ -1,28 +1,39 @@
 # Architecture
 
-FinSight is a modular monolith. The React application calls a FastAPI REST API; SQLAlchemy scopes each user-owned transaction, import, budget, goal, recurring status, and setting query by authenticated user ID. SQLite is the quick-start database and PostgreSQL is the Compose/deployment target.
+FinSight is a modular monolith: a React/TypeScript web application talks to one FastAPI API, and SQLAlchemy repositories/services use a single SQLite or PostgreSQL database. The API owns all authoritative money calculations. PostgreSQL 16 with pgvector is the deployment target; SQLite remains useful for local development and tests.
 
 ```mermaid
-flowchart LR
-  Browser[React + TypeScript] --> API[FastAPI]
-  API --> Auth[Argon2 + hashed opaque session]
-  API --> SQL[SQLAlchemy / Alembic]
-  SQL --> DB[(SQLite or PostgreSQL)]
-  API --> CSV[CSV parser]
-  API --> PDF[PyMuPDF text extraction]
-  CSV --> Review[Review and correction]
-  PDF --> Review
-  Review -->|confirm| SQL
-  API --> Calc[Deterministic Decimal calculations]
-  API --> LocalRAG[Local note retrieval]
-  API --> ML[Optional sklearn categorizer]
+flowchart TB
+  UI[React feature pages] --> API[Typed API client]
+  API --> MW[CSRF, auth, rate limit, security headers]
+  MW --> ROUTES[FastAPI routers]
+  ROUTES --> SERVICES[Import, analytics, planning, assistant services]
+  SERVICES --> REPO[Owner-scoped SQLAlchemy queries]
+  REPO --> PG[(PostgreSQL 16 + pgvector)]
+  ASSISTANT[Assistant orchestrator] --> PERSONAL[Constrained operations]
+  PERSONAL --> SERVICES
+  ASSISTANT --> RAG[Retrieve, threshold, deduplicate, cite]
+  RAG --> PG
+  ASSISTANT --> LLM[Mock or OpenAI adapter]
+  IMPORT[Validate, extract, parse, reconcile, deduplicate] --> SERVICES
+  INGEST[Knowledge ingestion CLI] --> PG
+  PG --> RUNS[Model-run token/usage records]
 ```
 
-The import pipeline does not persist raw statement bytes. Parsed candidates are stored temporarily in an owner-scoped import job for correction, expire after 24 hours, and are erased after confirmation. Personal queries use fixed operations and do not issue generated SQL. Retrieved education notes are static, authored by this project, and are never treated as instructions.
+## Answering paths
 
-## Deliberate boundaries
+The assistant separates personal-data questions from financial-education questions. Personal questions are classified into fixed operations over the authenticated user's rows; generated SQL is never accepted or executed. The returned calculation card, values, dates, and citations remain server-authored. The optional LLM adapter receives only the already-verified response for constrained phrasing; a rewrite is rejected if its numeric values or URLs differ from the source. The mock provider is the default and makes no network requests. The OpenAI-compatible adapter is enabled only with `LLM_PROVIDER=openai` and `OPENAI_API_KEY`, and uses bounded timeouts/retries.
 
-- No financial provider connector is enabled.
-- The education retriever is lexical term-overlap over a small local corpus, not an embedding model or pgvector service.
-- LLM providers, streaming responses, persistent chat history, OCR, background workers, and distributed rate limiting are not present.
-- Compose includes PostgreSQL with pgvector available, but this version does not create vector columns or run vector queries.
+Education answers retrieve versioned document chunks. PostgreSQL stores 1536-dimension embeddings and performs cosine-distance top-k retrieval with a relevance cutoff and per-document deduplication. SQLite and no-credential local flows use a deterministic lexical fallback. Citations link to an internal document record and identify the verified publisher/reference URL; unknown questions abstain. The bundled notes are FinSight-authored summaries, not claims of RBI authorship. The RBI Financial Education page was verified at <https://www.rbi.org.in/FinancialEducation/Home.aspx> on 2026-10-15.
+
+## Import and persistence boundaries
+
+Statement imports follow `uploaded → parsed → preview → confirmed` (or `expired`/`failed`) semantics. Upload bytes and PDF passwords are never stored. Parsing is size/page/time bounded. The generic bank adapter extracts text, flags scanned PDFs, attempts opening/closing balance reconciliation when both balances are present, and requires review. Confirmation writes transactions in one database transaction; `(user_id, fingerprint)` uniqueness makes duplicates idempotent. Preview data expires after 24 hours and is erased after confirmation.
+
+Every owner-scoped query takes an authenticated `user_id`. Foreign resource IDs resolve to 404. User deletion removes conversations/messages and user-owned records; model usage records are retained without the user ID. Monetary values use `Decimal` and `Numeric(14,2)` at rest.
+
+## Persistence and deployment
+
+Alembic migrations are explicit, versioned schema changes; deploy with `AUTO_CREATE_SCHEMA=false` and run migrations as a release step. The migration set enables pgvector on PostgreSQL and creates relational constraints/indexes plus an HNSW cosine index. `/ready` checks database access. The authentication-attempt limiter uses Postgres/SQLite upserts, so it is shared between API workers using the same database. TLS termination, secure cookies, secrets, backup retention, and operational monitoring remain deployment responsibilities.
+
+There is no Redis, background worker, OCR service, or live bank integration. A disabled financial-data provider extension point does not enable bank connectivity; settings explicitly report that live connections are unavailable.

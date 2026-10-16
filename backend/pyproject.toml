@@ -3,7 +3,25 @@ name = "finsight-ai-api"
 version = "0.1.0"
 requires-python = ">=3.11"
 description = "Personal finance analysis API with review-first statement import"
+dependencies = [
+    "pgvector==0.4.1",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-ra"
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E4", "E9", "F"]
+ignore = ["E401"]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+check_untyped_defs = true
+follow_imports = "silent"
+warn_unused_ignores = true

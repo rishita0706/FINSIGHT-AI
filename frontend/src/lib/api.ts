@@ -31,6 +31,7 @@ export type User = { id: string; email: string };
 export type Transaction = {
   id: string; date: string; description: string; amount: string; currency: string;
   direction: "debit" | "credit"; tx_type: string; category: string; category_source: string;
+  category_confidence?: string | null;
 };
 export type Overview = {
   income: string; expenses: string; net_cash_flow: string; savings_rate: string | null;

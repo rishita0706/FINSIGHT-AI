@@ -1,7 +1,7 @@
-import copy, csv, hashlib, io, os, re, secrets, time
-from collections import defaultdict, deque
+import asyncio, copy, csv, hashlib, io, json, os, re, secrets
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
+from pathlib import Path
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from argon2 import PasswordHasher
@@ -10,17 +10,25 @@ from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Respon
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, EmailStr, Field, field_validator
-from sqlalchemy import delete, select
+from sqlalchemy import case, delete, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 from . import logic
 from .assistant import answer_financial_question
 from .anomaly import find_anomaly_candidates
 from .categorization import predict_category
 from .db import Base, engine, get_db
+from .integrations.llm import ProviderError, get_provider, phrase_verified
+from .integrations.financial_data import get_provider as get_financial_data_provider
 from .knowledge import DOCUMENTS, answer_knowledge_question
-from .models import AuthSession, Budget, ImportJob, RecurringStatus, SavingsGoal, Transaction, User, UserSettings, now
-from .pdf_import import parse_pdf
+from .models import (
+    AuthRateLimit, AuthSession, Budget, Conversation, ImportJob, KnowledgeChunk,
+    KnowledgeDocument, Message, ModelRun, RecurringStatus, SavingsGoal,
+    Transaction, User, UserSettings, now,
+)
+from .pdf_import import parse_pdf_with_timeout
 
 if os.getenv("AUTO_CREATE_SCHEMA", "true").lower() == "true":
     Base.metadata.create_all(engine)
@@ -37,35 +45,55 @@ app.add_middleware(
 ph = PasswordHasher()
 COOKIE, SESSION_DAYS, MAX_UPLOAD = "fs_session", 7, 2_000_000
 DateType = date
-AUTH_ATTEMPTS: dict[str, deque[float]] = defaultdict(deque)
 
-def enforce_auth_rate_limit(request: Request, email: str) -> None:
+
+def enforce_auth_rate_limit(request: Request, email: str, db: Session) -> None:
     key = request.client.host if request.client else "unknown"
-    cutoff = time.monotonic() - 300
-    if len(AUTH_ATTEMPTS) > 2000:
-        for entry in list(AUTH_ATTEMPTS):
-            if not AUTH_ATTEMPTS[entry] or AUTH_ATTEMPTS[entry][-1] < cutoff:
-                AUTH_ATTEMPTS.pop(entry, None)
-    ip_attempts, account_attempts = AUTH_ATTEMPTS[key], AUTH_ATTEMPTS[f"{key}:{email.casefold()}"]
-    for attempts in (ip_attempts, account_attempts):
-        while attempts and attempts[0] < cutoff:
-            attempts.popleft()
-    if len(ip_attempts) >= 100 or len(account_attempts) >= 10:
+    cutoff = now() - timedelta(minutes=5)
+    attempted_at = now()
+    ip_key = hashlib.sha256(f"ip:{key}".encode()).hexdigest()
+    account_key = hashlib.sha256(f"account:{email.casefold()}".encode()).hexdigest()
+    insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+    counts = []
+    for limit_key, limit in ((ip_key, 100), (account_key, 10)):
+        statement = insert(AuthRateLimit).values(
+            key=limit_key, attempts=1, window_started_at=attempted_at,
+        )
+        expired = AuthRateLimit.window_started_at < cutoff
+        statement = statement.on_conflict_do_update(
+            index_elements=[AuthRateLimit.key],
+            set_={
+                "attempts": case((expired, 1), else_=AuthRateLimit.attempts + 1),
+                "window_started_at": case((expired, attempted_at), else_=AuthRateLimit.window_started_at),
+            },
+        ).returning(AuthRateLimit.attempts)
+        counts.append((db.scalar(statement), limit))
+    db.execute(delete(AuthRateLimit).where(AuthRateLimit.window_started_at < cutoff))
+    db.commit()
+    if any(attempts > limit for attempts, limit in counts):
         raise HTTPException(429, "Too many authentication attempts. Try again in a few minutes.")
-    attempt_time = time.monotonic()
-    ip_attempts.append(attempt_time)
-    account_attempts.append(attempt_time)
 
 @app.middleware("http")
 async def csrf_and_headers(request: Request, call_next):
     # Basic CSRF defence: state-changing requests need a custom header (+ SameSite=Lax cookie).
     if request.method in {"POST", "PATCH", "PUT", "DELETE"} and request.headers.get("x-requested-with") != "FinSight":
-        return JSONResponse({"detail": "Missing CSRF header"}, status_code=403)
-    resp = await call_next(request)
+        resp = JSONResponse({"detail": "Missing CSRF header"}, status_code=403)
+    else:
+        resp = await call_next(request)
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
     resp.headers["Cache-Control"] = "no-store"
+    if request.url.path in {"/docs", "/redoc", "/docs/oauth2-redirect"}:
+        resp.headers["Content-Security-Policy"] = (
+            "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; img-src 'self' data:; "
+            "connect-src 'self'; frame-ancestors 'none'; base-uri 'none'"
+        )
+    else:
+        resp.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+    if os.getenv("COOKIE_SECURE", "").casefold() == "true":
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return resp
 
 def _hash(tok: str) -> str: return hashlib.sha256(tok.encode()).hexdigest()
@@ -89,7 +117,7 @@ def health(): return {"status": "ok"}
 
 @app.post("/api/v1/auth/register", status_code=201)
 def register(c: Creds, request: Request, db: Session = Depends(get_db)):
-    enforce_auth_rate_limit(request, c.email)
+    enforce_auth_rate_limit(request, c.email, db)
     u = User(email=c.email.lower(), password_hash=ph.hash(c.password))
     db.add(u)
     try: db.commit()
@@ -99,18 +127,23 @@ def register(c: Creds, request: Request, db: Session = Depends(get_db)):
 
 @app.post("/api/v1/auth/login")
 def login(c: Creds, response: Response, request: Request, db: Session = Depends(get_db)):
-    enforce_auth_rate_limit(request, c.email)
+    enforce_auth_rate_limit(request, c.email, db)
     u = db.scalar(select(User).where(User.email == c.email.lower()))
     try:
         ok = bool(u) and ph.verify(u.password_hash, c.password)
     except VerifyMismatchError:
         ok = False
     if not ok: raise HTTPException(401, "Invalid email or password")
+    old_token = request.cookies.get(COOKIE)
+    if old_token:
+        old_session = db.get(AuthSession, _hash(old_token))
+        if old_session:
+            db.delete(old_session)
     tok = secrets.token_urlsafe(32)
     db.add(AuthSession(token_hash=_hash(tok), user_id=u.id, expires_at=now() + timedelta(days=SESSION_DAYS)))
     db.commit()
     response.set_cookie(COOKIE, tok, httponly=True, samesite="lax",
-                        secure=bool(__import__("os").getenv("COOKIE_SECURE", "").lower() == "true"),
+                        secure=os.getenv("COOKIE_SECURE", "").casefold() == "true",
                         max_age=SESSION_DAYS * 86400)
     return {"id": u.id, "email": u.email}
 
@@ -234,9 +267,13 @@ async def upload_import(file: UploadFile = File(...), password: str | None = For
         if file.content_type not in {"application/pdf", "application/octet-stream"}:
             raise HTTPException(415, "The file content does not match a PDF statement")
         try:
-            rows, warnings = parse_pdf(raw, password)
+            rows, warnings = await asyncio.to_thread(parse_pdf_with_timeout, raw, password, 15)
+        except TimeoutError as e:
+            raise HTTPException(422, "PDF parsing exceeded the 15-second limit") from e
         except ValueError as e:
             raise HTTPException(422, str(e))
+        except RuntimeError as e:
+            raise HTTPException(422, "The PDF parser could not process this document") from e
         source_type = "pdf"
     else:
         if file.content_type not in {"text/csv", "application/csv", "application/vnd.ms-excel", "application/octet-stream"}:
@@ -318,6 +355,9 @@ def correct_preview(jid: str, body: ImportReviewPatch, u: User = Depends(current
             raise HTTPException(422, f"Line {correction.line} cannot be corrected")
         changes = correction.model_dump(exclude_unset=True, exclude={"line"})
         target.update({key: str(value) if isinstance(value, (date, Decimal)) else value for key, value in changes.items()})
+        if "category" in changes:
+            target["category_source"] = "user"
+            target["category_confidence"] = None
         if all(target.get(key) for key in ("date", "description", "amount", "direction")):
             amount = Decimal(str(target["amount"]))
             target.update(status="ok", errors=[], amount=str(amount),
@@ -412,22 +452,253 @@ def monthly_comparison(u: User = Depends(current_user), db: Session = Depends(ge
 class AssistantQuestion(BaseModel):
     question: str = Field(min_length=3, max_length=1000)
 
+
+def _verified_assistant_answer(db: Session, user: User, question: str) -> dict:
+    try:
+        provider = get_provider()
+    except RuntimeError as exc:
+        raise HTTPException(503, str(exc)) from exc
+    retrieval_failed = False
+    warnings = []
+    financial_intent = re.search(
+        r"\b(spend|expense|income|transaction|category|cash flow|recurring|payment|save|savings|goal|largest|merchant|month)\b",
+        question,
+        re.IGNORECASE,
+    )
+    education_intent = re.search(
+        r"\b(compound interest|budget|emergency fund|credit card|loan|inflation|fraud|digital banking|saving habit)\b",
+        question,
+        re.IGNORECASE,
+    )
+    def answer_education() -> dict:
+        nonlocal retrieval_failed
+        try:
+            return answer_knowledge_question(question, db, provider)
+        except ProviderError:
+            retrieval_failed = True
+            db.rollback()
+            return answer_knowledge_question(question, provider=provider)
+
+    if financial_intent and education_intent:
+        personal = answer_financial_question(db, user.id, question, user_today(db, user))
+        education = answer_education()
+        result = {
+            "mode": "combined",
+            "answer": (
+                "Your financial data\n\n" + personal["answer"]
+                + "\n\nGeneral education\n\n" + education["answer"]
+            ),
+            "calculation": personal.get("calculation"),
+            "citations": education.get("citations", []),
+            "sections": [
+                {
+                    "kind": "personal_finance",
+                    "title": "Your financial data",
+                    "answer": personal["answer"],
+                    "calculation": personal.get("calculation"),
+                    "citations": [],
+                },
+                {
+                    "kind": "education",
+                    "title": "General education",
+                    "answer": education["answer"],
+                    "calculation": None,
+                    "citations": education.get("citations", []),
+                },
+            ],
+        }
+        warnings.extend(education.get("warnings", []))
+    elif education_intent:
+        result = answer_education()
+    elif financial_intent:
+        result = answer_financial_question(db, user.id, question, user_today(db, user))
+    else:
+        result = answer_education()
+
+    try:
+        phrased = phrase_verified(provider, result["answer"])
+        result["answer"] = phrased.text
+        db.add(ModelRun(
+            user_id=user.id,
+            provider=provider.name,
+            model=provider.model,
+            purpose="assistant_phrase",
+            input_tokens=phrased.input_tokens,
+            output_tokens=phrased.output_tokens,
+            succeeded=True,
+        ))
+    except ProviderError:
+        db.add(ModelRun(
+            user_id=user.id, provider=provider.name, model=provider.model,
+            purpose="assistant_phrase", input_tokens=0, output_tokens=0, succeeded=False,
+        ))
+        warnings.append("Optional LLM phrasing was unavailable; the verified answer is shown unchanged.")
+    if retrieval_failed:
+        db.add(ModelRun(
+            user_id=user.id, provider=provider.name, model=provider.model,
+            purpose="assistant_retrieval", input_tokens=0, output_tokens=0, succeeded=False,
+        ))
+        warnings.append("The optional LLM service was unavailable; verified local results are shown.")
+    if warnings:
+        result["warnings"] = list(dict.fromkeys(warnings))
+    db.commit()
+    return result
+
+
 @app.post("/api/v1/assistant/query")
 def assistant_query(body: AssistantQuestion, u: User = Depends(current_user), db: Session = Depends(get_db)):
-    if re.search(r"\b(compound interest|budget|emergency fund|credit card|loan|inflation|fraud|digital banking|saving habit)\b",
-                 body.question, re.IGNORECASE):
-        return answer_knowledge_question(body.question)
-    if re.search(r"\b(spend|expense|income|transaction|category|cash flow|recurring|payment|save|savings|goal|largest|merchant|month)\b",
-                 body.question, re.IGNORECASE):
-        return answer_financial_question(db, u.id, body.question, user_today(db, u))
-    return answer_knowledge_question(body.question)
+    return _verified_assistant_answer(db, u, body.question)
+
+
+def conversation_out(conversation: Conversation) -> dict:
+    return {
+        "id": conversation.id,
+        "title": conversation.title,
+        "created_at": conversation.created_at.isoformat(),
+        "updated_at": conversation.updated_at.isoformat(),
+    }
+
+
+def owned_conversation(db: Session, user: User, conversation_id: str) -> Conversation:
+    conversation = db.scalar(select(Conversation).where(
+        Conversation.id == conversation_id,
+        Conversation.user_id == user.id,
+    ))
+    if conversation is None:
+        raise HTTPException(404, "Conversation not found")
+    return conversation
+
+
+@app.get("/api/v1/conversations")
+def list_conversations(u: User = Depends(current_user), db: Session = Depends(get_db)):
+    items = db.scalars(
+        select(Conversation).where(Conversation.user_id == u.id)
+        .order_by(Conversation.updated_at.desc())
+    ).all()
+    return [conversation_out(item) for item in items]
+
+
+@app.post("/api/v1/conversations", status_code=201)
+def create_conversation(u: User = Depends(current_user), db: Session = Depends(get_db)):
+    conversation = Conversation(user_id=u.id)
+    db.add(conversation)
+    db.commit()
+    db.refresh(conversation)
+    return conversation_out(conversation)
+
+
+@app.get("/api/v1/conversations/{conversation_id}")
+def get_conversation(conversation_id: str, u: User = Depends(current_user), db: Session = Depends(get_db)):
+    conversation = owned_conversation(db, u, conversation_id)
+    messages = db.scalars(
+        select(Message).where(Message.conversation_id == conversation.id)
+        .order_by(Message.created_at, Message.id)
+    ).all()
+    return {
+        **conversation_out(conversation),
+        "messages": [{
+            "id": item.id,
+            "role": item.role,
+            "content": item.content,
+            "calculation": item.calculation,
+            "citations": item.citations,
+            "sections": item.sections,
+            "created_at": item.created_at.isoformat(),
+        } for item in messages],
+    }
+
+
+@app.post("/api/v1/conversations/{conversation_id}/messages", status_code=201)
+def create_conversation_message(
+    conversation_id: str,
+    body: AssistantQuestion,
+    u: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    conversation = owned_conversation(db, u, conversation_id)
+    question = Message(conversation_id=conversation.id, role="user", content=body.question)
+    db.add(question)
+    db.flush()
+    answer = _verified_assistant_answer(db, u, body.question)
+    response_message = Message(
+        conversation_id=conversation.id,
+        role="assistant",
+        content=answer["answer"],
+        calculation=answer.get("calculation"),
+        citations=answer.get("citations", []),
+        sections=answer.get("sections", []),
+    )
+    conversation.title = body.question[:200]
+    conversation.updated_at = now()
+    db.add(response_message)
+    db.commit()
+    db.refresh(response_message)
+    return {
+        "user_message": {"id": question.id, "role": question.role, "content": question.content},
+        "assistant_message": {
+            "id": response_message.id,
+            "role": response_message.role,
+            "content": response_message.content,
+            "calculation": response_message.calculation,
+            "citations": response_message.citations,
+            "sections": response_message.sections,
+        },
+        "warnings": answer.get("warnings", []),
+    }
+
+
+@app.delete("/api/v1/conversations/{conversation_id}", status_code=204)
+def delete_conversation(conversation_id: str, u: User = Depends(current_user), db: Session = Depends(get_db)):
+    conversation = owned_conversation(db, u, conversation_id)
+    db.execute(delete(Message).where(Message.conversation_id == conversation.id))
+    db.delete(conversation)
+    db.commit()
 
 @app.get("/api/v1/knowledge/documents")
-def list_knowledge_documents(u: User = Depends(current_user)):
-    return [{key: value for key, value in document.items() if key != "content"} for document in DOCUMENTS]
+def list_knowledge_documents(u: User = Depends(current_user), db: Session = Depends(get_db)):
+    documents = db.scalars(select(KnowledgeDocument).where(KnowledgeDocument.active.is_(True))).all()
+    if not documents:
+        return [{key: value for key, value in document.items() if key != "content"} for document in DOCUMENTS]
+    return [{
+        "id": document.external_id,
+        "title": document.title,
+        "topic": document.topic,
+        "source_type": document.source_type,
+        "source_url": document.source_url,
+        "reference_url": document.reference_url,
+        "version": document.version,
+        "updated_at": document.updated_at.isoformat(),
+    } for document in documents]
+
 
 @app.get("/api/v1/knowledge/documents/{document_id}")
-def get_knowledge_document(document_id: str, u: User = Depends(current_user)):
+def get_knowledge_document(
+    document_id: str,
+    u: User = Depends(current_user),
+    db: Session = Depends(get_db),
+):
+    document = db.scalar(select(KnowledgeDocument).where(
+        KnowledgeDocument.external_id == document_id,
+        KnowledgeDocument.active.is_(True),
+    ))
+    if document is not None:
+        chunks = db.scalars(
+            select(KnowledgeChunk).where(
+                KnowledgeChunk.document_id == document.id,
+                KnowledgeChunk.version == document.version,
+            ).order_by(KnowledgeChunk.chunk_index)
+        ).all()
+        return {
+            "id": document.external_id,
+            "title": document.title,
+            "topic": document.topic,
+            "source_type": document.source_type,
+            "source_url": document.source_url,
+            "reference_url": document.reference_url,
+            "version": document.version,
+            "updated_at": document.updated_at.isoformat(),
+            "content": "\n\n".join(chunk.content for chunk in chunks),
+        }
     document = next((item for item in DOCUMENTS if item["id"] == document_id), None)
     if document is None: raise HTTPException(404, "Knowledge document not found")
     return document
@@ -573,6 +844,18 @@ def insights(u: User = Depends(current_user), db: Session = Depends(get_db)):
     return {"items": items, "anomaly_candidates": find_anomaly_candidates(transactions),
             "limitations": ["Insights describe recorded transactions only and do not establish causes. Unusual transactions are not proof of fraud."]}
 
+
+@app.get("/api/v1/ml/categorizer/evaluation")
+def categorizer_evaluation(u: User = Depends(current_user)):
+    report = Path(__file__).resolve().parent / "ml" / "evaluation.json"
+    if not report.is_file():
+        return {
+            "available": False,
+            "message": "Categorizer evaluation is not available yet. Run scripts/evaluate_categorizer.py.",
+        }
+    return {"available": True, **json.loads(report.read_text(encoding="utf-8"))}
+
+
 @app.get("/api/v1/forecasts")
 def forecast(u: User = Depends(current_user), db: Session = Depends(get_db)):
     current_month = user_today(db, u).strftime("%Y-%m")
@@ -590,7 +873,16 @@ def get_settings(u: User = Depends(current_user), db: Session = Depends(get_db))
     settings = db.get(UserSettings, u.id)
     if settings is None:
         settings = UserSettings(user_id=u.id); db.add(settings); db.commit()
-    return {"currency": settings.currency, "timezone": settings.timezone, "bank_connectivity": "not_available_in_mvp"}
+    return {
+        "currency": settings.currency,
+        "timezone": settings.timezone,
+        "bank_connectivity": "not_available_in_mvp",
+        "bank_connectivity_message": (
+            "Live bank connections are unavailable in this MVP."
+            if get_financial_data_provider() is None
+            else "A financial-data provider is configured."
+        ),
+    }
 
 class SettingsPatch(BaseModel):
     currency: Literal["INR"] | None = None
@@ -610,7 +902,16 @@ def patch_settings(body: SettingsPatch, u: User = Depends(current_user), db: Ses
     if settings is None: settings = UserSettings(user_id=u.id); db.add(settings)
     for key, value in body.model_dump(exclude_unset=True).items(): setattr(settings, key, value)
     db.commit()
-    return {"currency": settings.currency, "timezone": settings.timezone, "bank_connectivity": "not_available_in_mvp"}
+    return {
+        "currency": settings.currency,
+        "timezone": settings.timezone,
+        "bank_connectivity": "not_available_in_mvp",
+        "bank_connectivity_message": (
+            "Live bank connections are unavailable in this MVP."
+            if get_financial_data_provider() is None
+            else "A financial-data provider is configured."
+        ),
+    }
 
 @app.post("/api/v1/settings/export")
 def export_data(u: User = Depends(current_user), db: Session = Depends(get_db)):
@@ -632,6 +933,11 @@ def delete_account(request: Request, response: Response, u: User = Depends(curre
     db.execute(delete(Budget).where(Budget.user_id == u.id))
     db.execute(delete(SavingsGoal).where(SavingsGoal.user_id == u.id))
     db.execute(delete(RecurringStatus).where(RecurringStatus.user_id == u.id))
+    db.execute(delete(Message).where(Message.conversation_id.in_(
+        select(Conversation.id).where(Conversation.user_id == u.id)
+    )))
+    db.execute(delete(Conversation).where(Conversation.user_id == u.id))
+    db.execute(ModelRun.__table__.update().where(ModelRun.user_id == u.id).values(user_id=None))
     db.execute(delete(AuthSession).where(AuthSession.user_id == u.id))
     db.execute(delete(UserSettings).where(UserSettings.user_id == u.id))
     db.delete(u); db.commit()

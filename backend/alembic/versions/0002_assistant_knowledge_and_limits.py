@@ -4,7 +4,7 @@ from alembic import op
 import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
 
-revision = "0002_assistant_knowledge_and_limits"
+revision = "0002_assistant_knowledge"
 down_revision = "0001_initial_schema"
 branch_labels = None
 depends_on = None

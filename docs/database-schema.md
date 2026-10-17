@@ -1,6 +1,6 @@
 # Database schema
 
-The authoritative schema is defined by `backend/app/models.py` and applied by ordered Alembic revisions in `backend/alembic/versions/`. The initial revision creates concrete tables and constraints; it does not call `metadata.create_all`. Revision `0002_assistant_knowledge_and_limits` adds chat history, vector documents/chunks, model usage, and shared auth rate limits.
+The authoritative schema is defined by `backend/app/models.py` and applied by ordered Alembic revisions in `backend/alembic/versions/`. The initial revision creates concrete tables and constraints; it does not call `metadata.create_all`. Revision `0002_assistant_knowledge` adds chat history, vector documents/chunks, model usage, and shared auth rate limits.
 
 | Table | Ownership / purpose |
 |---|---|

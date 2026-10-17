@@ -6,7 +6,7 @@ import re
 from html.parser import HTMLParser
 
 import pymupdf
-from sqlalchemy import select
+from sqlalchemy import Float, select
 from sqlalchemy.orm import Session
 
 from .integrations.llm import Provider, get_provider
@@ -213,7 +213,7 @@ def retrieve_from_db(
     vector = provider.embed(query)
     if not any(vector):
         return []
-    distance = KnowledgeChunk.embedding.op("<=>")(vector).label("distance")
+    distance = KnowledgeChunk.embedding.op("<=>", return_type=Float())(vector).label("distance")
     rows = db.execute(
         select(KnowledgeDocument, KnowledgeChunk, distance)
         .join(KnowledgeChunk, KnowledgeChunk.document_id == KnowledgeDocument.id)

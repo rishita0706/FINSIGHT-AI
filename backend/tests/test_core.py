@@ -192,6 +192,13 @@ def test_knowledge_retrieval_cites_retrieved_notes_and_abstains():
     assert unknown.json()["citations"] == []
     assert "not enough evidence" in unknown.json()["answer"]
 
+def test_pgvector_cosine_distance_expression_returns_scalar_type():
+    from sqlalchemy import Float
+    from app.models import KnowledgeChunk
+
+    distance = KnowledgeChunk.embedding.op("<=>", return_type=Float())([0.0] * 1536)
+    assert isinstance(distance.type, Float)
+
 def test_knowledge_refresh_is_versioned_and_idempotent():
     from app.db import SessionLocal
     from app.integrations.llm import MockProvider
